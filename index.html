@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Asia Speaking Game</title>
+    <style>
+        * { box-sizing: border-box; touch-action: manipulation; }
+        body {
+            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Arial', sans-serif;
+            background-color: #f0f8ff;
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .box {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 4px solid #ffcc00;
+        }
+
+        h1 { color: #e65100; font-size: 24px; margin-bottom: 5px; }
+        p { font-size: 16px; color: #555; }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border: 2px solid #ccc;
+        }
+
+        .bubble {
+            background: #fdfdfd;
+            border: 4px solid #2196F3;
+            border-radius: 15px;
+            padding: 25px 15px;
+            margin: 15px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            min-height: 120px;
+            align-items: center;
+        }
+
+        .word-span {
+            font-size: 26px;
+            font-weight: bold;
+            color: #b0bec5; /* Upcoming words stay gray */
+            padding: 4px 8px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        /* Yellow highlight for the SINGLE active target word */
+        .word-span.current-target {
+            color: #000000;
+            background-color: #fff59d; 
+            border: 2px dashed #ff9800;
+        }
+
+        /* Turns green instantly when the student pronounces it right */
+        .word-span.spoken-correctly {
+            color: white !important;
+            background-color: #4CAF50 !important; 
+            border: 2px solid #4CAF50 !important;
+        }
+
+        .mic-indicator {
+            font-size: 16px;
+            font-weight: bold;
+            color: #757575;
+            margin-bottom: 15px;
+            min-height: 24px;
+        }
+
+        .listening {
+            color: #e91e63;
+        }
+
+        .btn {
+            background-color: #e91e63;
+            color: white;
+            border: none;
+            padding: 18px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 30px;
+            width: 90%;
+            margin: 10px auto;
+            display: block;
+            cursor: pointer;
+            box-shadow: 0 5px 0 #c2185b;
+            -webkit-appearance: none;
+        }
+        .btn:active { transform: translateY(2px); box-shadow: 0 3px 0 #c2185b; }
+        .btn-green { background-color: #4CAF50; box-shadow: 0 5px 0 #2e7d32; }
+        .btn-green:active { box-shadow: 0 3px 0 #2e7d32; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="box" id="step1">
+    <h1>🗣️ Asia Speaking Game</h1>
+    <p>Choose your country and place:</p>
+    
+    <select id="co" onchange="changePlace()">
+        <option value="the Philippines">the Philippines 🇵🇭</option>
+        <option value="India">India 🇮🇳</option>
+        <option value="Japan">Japan 🇯🇵</option>
+        <option value="South Korea">South Korea 🇰🇷</option>
+        <option value="Thailand">Thailand 🇹🇭</option>
+    </select>
+
+    <select id="pl"></select>
+
+    <button class="btn btn-green" onclick="start()">START GAME 🚀</button>
+</div>
+
+<div class="box hidden" id="step2">
+    <p id="who" style="font-weight: bold; font-size: 20px; color: #2196F3; margin: 0;"></p>
+    
+    <div class="bubble" id="text-box"></div>
+    
+    <div id="mic-status" class="mic-indicator">Tap once below, then read the full sentence!</div>
+
+    <!-- One tap button opens continuous listening for the whole sentence -->
+    <button class="btn" id="action-btn" onclick="startSentenceListening()">🎤 START READING</button>
+    <button class="btn btn-green hidden" id="next-btn" onclick="next()">NEXT SENTENCE ➡️</button>
+</div>
+
+<div class="box hidden" id="step3">
+    <h1>🎉 Finish! 🎉</h1>
+    <p>Incredible reading! You finished the challenge.</p>
+    <div style="font-size: 50px; margin: 15px 0;">⭐⭐⭐⭐⭐</div>
+    <button class="btn btn-green" onclick="location.reload()">PLAY AGAIN 🔄</button>
+</div>
+
+<script>
+    const map = {
+        "the Philippines": ["the Chocolate Hills", "Boracay Beach", "Manila Ocean Park"],
+        "India": ["the Taj Mahal", "the Golden Temple", "the Lotus Temple"],
+        "Japan": ["Mount Fuji", "Tokyo Disneyland", "Osaka Castle"],
+        "South Korea": ["Gyeongbokgung Palace", "N Seoul Tower", "Jeju Island"],
+        "Thailand": ["the Grand Palace", "Chiang Mai Temple", "Phuket Beach"]
+    };
+
+    function changePlace() {
+        const pSel = document.getElementById('pl');
+        pSel.innerHTML = "";
+        map[document.getElementById('co').value].forEach(place => {
+            let o = document.createElement('option');
+            o.value = place; o.innerText = place;
+            pSel.appendChild(o);
+        });
+    }
+    changePlace();
+
+    let lines = [];
+    let idx = 0;
+    let currentWordOrderIndex = 0; 
+    let cleanTargetWords = []; 
+    let recognition = null;
+    let isListeningActive = false;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true; // Stays active for the whole sentence
+        recognition.interimResults = true; // Captures speech streams dynamically
+        recognition.lang = 'en-US';
+    }
+
+    function start() {
+        let c = document.getElementById('co').value;
+        let p = document.getElementById('pl').value;
+
+        lines = [
+            { name: "Person A 🧑‍🚀", raw: ["Do", "you", "know", c, "?"] },
+            { name: "Person B 👩‍🎨", raw: ["Yes!", c, "is", "a", "country", "in", "Asia."] },
+            { name: "Person A 🧑‍🚀", raw: ["What", "famous", "place", "is", "in", c, "?"] },
+            { name: "Person B 👩‍🎨", raw: [p, "is", "a", "famous", "place", "in", c, "."] },
+            { name: "Person A 🧑‍🚀", raw: ["Wow!", "I", "want", "to", "visit", "it."] }
+        ];
+
+        document.getElementById('step1').classList.add('hidden');
+        document.getElementById('step2').classList.remove('hidden');
+        loadSentence();
+    }
+
+    function loadSentence() {
+        currentWordOrderIndex = 0;
+        cleanTargetWords = [];
+        isListeningActive = false;
+        
+        document.getElementById('who').innerText = lines[idx].name;
+        document.getElementById('next-btn').classList.add('hidden');
+        document.getElementById('action-btn').classList.remove('hidden');
+        resetUiButton();
+
+        const textBox = document.getElementById('text-box');
+        textBox.innerHTML = "";
+
+        lines[idx].raw.forEach((word, wordIdx) => {
+            let span = document.createElement('span');
+            span.className = "word-span";
+            span.innerText = word;
+            span.id = `w-${wordIdx}`;
+            textBox.appendChild(span);
+
+            // Break multiple words down into clean individual words (e.g., "the", "Philippines")
+            let wordsSplit = word.toLowerCase().replace(/[.,!?]/g, "").trim().split(/\s+/);
+            wordsSplit.forEach(w => {
+                if (w !== "") {
+                    cleanTargetWords.push({ id: `w-${wordIdx}`, text: w });
+                }
+            });
+        });
+
+        highlightTargetWord();
+    }
+
+    function highlightTargetWord() {
+        cleanTargetWords.forEach(w => {
+            document.getElementById(w.id).classList.remove('current-target');
+        });
+
+        if (currentWordOrderIndex < cleanTargetWords.length) {
+            let targetElement = document.getElementById(cleanTargetWords[currentWordOrderIndex].id);
+            targetElement.classList.add('current-target');
+        }
+    }
+
+    function startSentenceListening() {
+        if (!recognition) return;
+        
+        try {
+            isListeningActive = true;
+            recognition.start();
+            
+            const btn = document.getElementById('action-btn');
+            btn.innerHTML = "🛑 LISTENING NOW...";
+            btn.style.backgroundColor = "#ff9800";
+            
+            document.getElementById('mic-status').className = "mic-indicator listening";
+            document.getElementById('mic-status').innerText = "Speak the whole sentence from left to right!";
+        } catch(e) {
+            recognition.stop();
+        }
+    }
+
+    if (recognition) {
+        recognition.onresult = function(event) {
+            let fullTranscript = "";
+            // Build the continuous history stream of everything said since button tap
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                fullTranscript += event.results[i][0].transcript;
+            }
+            
+            let spokenTokens = fullTranscript.toLowerCase().split(/\s+/);
+
+            // Strict checking logic loop
+            let updatedProgress = true;
+            while(updatedProgress && currentWordOrderIndex < cleanTargetWords.length) {
+                updatedProgress = false;
+                let activeTarget = cleanTargetWords[currentWordOrderIndex];
+                
+                // Scan vocabulary matches sequentially
+                for (let token of spokenTokens) {
+                    if (token === activeTarget.text || token.includes(activeTarget.text)) {
+                        let wordElement = document.getElementById(activeTarget.id);
+                        wordElement.classList.remove('current-target');
+                        wordElement.classList.add('spoken-correctly');
+                        
+                        currentWordOrderIndex++;
+                        updatedProgress = true; // Continue testing if next sequential word is found
+                        break;
+                    }
+                }
+            }
+            
+            if (updatedProgress) {
+                highlightTargetWord();
+            }
+
+            // End sentence trigger execution block
+            if (currentWordOrderIndex >= cleanTargetWords.length) {
+                recognition.stop();
+            }
+        };
+
+        recognition.onend = function() {
+            if (currentWordOrderIndex >= cleanTargetWords.length) {
+                document.getElementById('action-btn').classList.add('hidden');
+                document.getElementById('next-btn').classList.remove('hidden');
+                document.getElementById('mic-status').className = "mic-indicator";
+                document.getElementById('mic-status').innerText = "🎉 All words matched! Click NEXT.";
+                document.getElementById('mic-status').style.color = "#4CAF50";
+            } else {
+                // If Safari pauses naturally before sentence completion, safely auto-restart to keep mic rolling
+                if (isListeningActive) {
+                    try { recognition.start(); } catch(e) {}
+                } else {
+                    resetUiButton();
+                    highlightTargetWord();
+                }
+            }
+        };
+
+        recognition.onerror = function() {
+            // Automatic safe recovery loop if audio cuts out mid-speech
+            if (isListeningActive) {
+                try { recognition.start(); } catch(e) {}
+            }
+        };
+    }
+
+    function resetUiButton() {
+        const btn = document.getElementById('action-btn');
+        btn.innerHTML = "🎤 START READING";
+        btn.style.backgroundColor = "#e91e63";
+        document.getElementById('mic-status').className = "mic-indicator";
+        document.getElementById('mic-status').innerText = "Tap the button once and read cleanly.";
+    }
+
+    function next() {
+        idx++;
+        if(idx < lines.length) {
+            loadSentence();
+        } else {
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.remove('hidden');
+        }
+    }
+</script>
+
+</body>
+</html>
